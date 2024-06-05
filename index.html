@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html>
+
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>סטרימירון</title>
+    <link rel="shortcut icon" type="image/x-icon" href="logo.png" />
+    <link rel="stylesheet" type="text/css" href="styles.css">
+</head>
+<body>
+    
+    <header>
+        <div class="logo">
+            <img src="logo.png" alt="Your Logo">
+        </div>
+    </header>
+
+    <h1>🔎 חפש סדרה או סרט</h1>
+    <input type="text" id="querybox" placeholder="כתוב שם של סרט/סדרה..." onkeyup="getanswer()">
+    <div id="answer"></div>
+
+    <script>
+        var data;
+        var selectedSeason = 1; // Default season
+        var selectedEpisode = 1; // Default episode
+        var embeddedEpisodes = [];
+
+        function getanswer() {
+            var query = document.getElementById('querybox').value;
+
+            $.get("https://www.omdbapi.com/?s=" + query + "&apikey=ba1f4581", function (rawdata) {
+                var rawstring = JSON.stringify(rawdata);
+                data = JSON.parse(rawstring);
+
+                if (data.Search && data.Search.length > 0) {
+                    var title = data.Search[0].Title;
+                    var year = data.Search[0].Year;
+                    var imdburl = "https://www.imdb.com/title/" + data.Search[0].imdbID + "/";
+                    var posterurl = data.Search[0].Poster;
+                    var director = data.Search[0].Director;
+                    var plot = data.Search[0].Plot;
+                    document.getElementById('answer').innerHTML = "<h1>" + title + "</h1><br> <img src='" + posterurl + "'><br><p> שנת יציאה: " + year + "</p> <br><p> במאי: " + director + "</p> <br> <p> IMDB דף: <a href='" + imdburl + "' target='_blank'>" + imdburl + "</a></p><p> תקציר: " + plot + "</p>";
+                } else {
+                    document.getElementById('answer').innerHTML = "<p>לא נמצאו תוצאות.</p>";
+                }
+            });
+        }
+
+        function showVideoEmbed(type) {
+            var id = data.Search[0].imdbID; // Replace with the actual video ID
+            var videoEmbed = document.getElementById("videoEmbed");
+            var buttons = document.querySelectorAll("button"); // Get all buttons
+
+            // Remove the "active" class from all buttons
+            buttons.forEach(function (button) {
+                button.classList.remove("active");
+            });
+
+            var button = document.getElementById(type + "Button");
+
+            if (type === "show") {
+                // Update the URL to include the selected season and episode
+                var embedUrl = "https://vidsrc.to/embed/tv/" + id + "/" + selectedSeason + "/" + selectedEpisode;
+                videoEmbed.src = embedUrl;
+
+                // Add the embedded episode to the list
+                var showName = data.Search[0].Title; // Get the show name
+                embeddedEpisodes.push({
+                    showName: showName,
+                    imdbID: id,
+                    season: selectedSeason,
+                    episode: selectedEpisode,
+                    embedUrl: embedUrl
+                });
+
+                // Update the episode list on the side
+                updateEpisodeList();
+
+                // Save embedded episodes to localStorage
+                localStorage.setItem("embeddedEpisodes", JSON.stringify(embeddedEpisodes));
+            } else if (type === "movie") {
+                // Update the URL for movies
+                videoEmbed.src = "https://vidsrc.to/embed/movie/" + id;
+            }
+
+            // Add the "active" class to the clicked button
+            button.classList.add("active");
+        }
+
+
+        // Add season and episode selection inputs
+        var seasonInput = document.createElement("input");
+        seasonInput.type = "number";
+        seasonInput.placeholder = "עונה";
+        seasonInput.addEventListener("input", function () {
+            selectedSeason = seasonInput.value;
+        });
+
+        var episodeInput = document.createElement("input");
+        episodeInput.type = "number";
+        episodeInput.placeholder = "פרק";
+        episodeInput.addEventListener("input", function () {
+            selectedEpisode = episodeInput.value;
+        });
+
+        // Create a button to trigger the embedding
+        var embedButton = document.createElement("button");
+        embedButton.textContent = "הפעל!";
+        embedButton.addEventListener("click", function () {
+            showVideoEmbed("show");
+        });
+
+        // Create a button to clear the list
+        var clearButton = document.createElement("button");
+        clearButton.textContent = "נקה רשימה";
+        clearButton.addEventListener("click", function () {
+            clearEpisodeList();
+        });
+
+        // Append the inputs and buttons to the page
+        document.body.appendChild(seasonInput);
+        document.body.appendChild(episodeInput);
+        document.body.appendChild(embedButton);
+        document.body.appendChild(clearButton);
+
+        // Create a div for the episode list
+        var episodeListDiv = document.createElement("div");
+        episodeListDiv.classList.add("episode-list");
+        document.body.appendChild(episodeListDiv);
+
+        // Function to update the episode list on the side
+        function updateEpisodeList() {
+            var episodeList = document.querySelector(".episode-list");
+            episodeList.innerHTML = "<h2>נצפו לאחרונה:</h2>";
+
+            if (embeddedEpisodes.length > 0) {
+                var ul = document.createElement("ul");
+
+                embeddedEpisodes.forEach(function (episode, index) {
+                    var li = document.createElement("li");
+                    li.textContent = episode.showName + " | עונה " + episode.season + " פרק " + episode.episode;
+                    li.setAttribute("data-index", index); // Store the index as a data attribute
+                    li.addEventListener("click", function () {
+                        // Click event to load the embedded video
+                        var selectedIndex = this.getAttribute("data-index");
+                        loadEmbeddedVideo(selectedIndex);
+                    });
+                    ul.appendChild(li);
+                });
+
+                episodeList.appendChild(ul);
+            } else {
+                episodeList.innerHTML += "עוד לא נצפה שום פרק.";
+            }
+        }
+
+        // Function to clear the episode list
+        function clearEpisodeList() {
+            embeddedEpisodes = [];
+            updateEpisodeList();
+
+            // Clear embedded episodes from localStorage
+            localStorage.removeItem("embeddedEpisodes");
+        }
+
+        // Function to load the embedded video when a list item is clicked
+        function loadEmbeddedVideo(index) {
+            var episode = embeddedEpisodes[index];
+            var embedUrl = episode.embedUrl;
+            var videoEmbed = document.getElementById("videoEmbed");
+            videoEmbed.src = embedUrl;
+        }
+
+        var storedEpisodes = localStorage.getItem("embeddedEpisodes");
+        if (storedEpisodes) {
+            embeddedEpisodes = JSON.parse(storedEpisodes);
+            updateEpisodeList(); // Update the episode list on page load
+        }
+    </script>
+    <button id="movieButton" onclick="showVideoEmbed('movie')">סרט</button>
+    <button id="showButton" onclick="showVideoEmbed('show')">סדרה</button>
+    <script src="https://code.jquery.com/jquery-3.2.1.min.js"></script>
+    <h1>סרטון:</h1>
+    <div class="embed-container">
+        <iframe id="videoEmbed" src="" frameborder="0" allowfullscreen></iframe>
+    </div>
+</body>
+</html>
+
+
